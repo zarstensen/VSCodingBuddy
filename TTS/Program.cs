@@ -1,16 +1,15 @@
-﻿using Microsoft.CognitiveServices.Speech;
-using Newtonsoft.Json.Linq;
-using System.Speech.Synthesis;
-using TTS;
-using StandardSpeechSynthesis = System.Speech.Synthesis.SpeechSynthesizer;
-using NeuralSpeechSynthesis = Microsoft.CognitiveServices.Speech.SpeechSynthesizer;
+﻿using TTS;
 
+//var chat_gpt = new Speaker("",
+//    "eeeeeee", "test");
+
+
+throw new Exception("");
+
+#if False
 // catch exception
 
 // generate text with chatgpt.
-
-var chat_gpt = new ChatGPT("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",
-    "Please explain the following exception error messages in a very rude and condescending way. Keep the responses to no more than 1000 characters, preferably less.");
 
 string response = await chat_gpt.generateResponse("Unhandled exception. System.ArgumentOutOfRangeException: Index was out of range. Must be non-negative and less than the size of the collection. (Parameter 'index') at Program.<Main>(String[] args)");
 
@@ -45,3 +44,4 @@ void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs
 {
     synth.SpeakSsmlAsync(File.ReadAllText("Phrase.ssml").Replace("[RESPONSE]", chat_gpt.generateResponse(e.ExceptionObject.ToString()).Result));
 };
+#endif

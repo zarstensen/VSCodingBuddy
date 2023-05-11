@@ -8,6 +8,9 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TTSE", "TTSE\TTSE.csproj", "{E94A4C5A-AB82-436A-A2B1-6AB13DF53084}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExceptionHelper", "ExceptionHelper\ExceptionHelper.csproj", "{3DFA03BC-48AF-4416-BFE6-C58FC9D1C110}"
+	ProjectSection(ProjectDependencies) = postProject
+		{E7CD3BEF-A6AB-4DF1-ACF2-AC7116124C14} = {E7CD3BEF-A6AB-4DF1-ACF2-AC7116124C14}
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
