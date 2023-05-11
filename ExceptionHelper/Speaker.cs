@@ -11,26 +11,40 @@ using OpenAI.GPT3.ObjectModels;
 using System.Speech.Synthesis;
 using System.IO;
 
-namespace TTS
+namespace ExceptionHelper
 {
+    /// <summary>
+    /// Class for handling an OpenAIService and SpeechSynthesizer instance.
+    /// </summary>
     public class Speaker
     {
-        public Speaker(string api_key, string prompt, string prompt_file)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="api_key"> openai api key </param>
+        /// <param name="prompt_file">
+        /// ssml file that will be used to generate the final text to speech, text.
+        /// The file should contain a [RESPONSE] field, which will be replaced by the openai prompt later.
+        /// </param>
+        public Speaker(string api_key, string prompt_file)
         {
-            open_ai_service = new OpenAIService(new OpenAiOptions()
+            m_open_ai_service = new OpenAIService(new OpenAiOptions()
             {
                 ApiKey = api_key
             });
 
-            this.prompt = prompt;
-            this.prompt_file = prompt_file;
+            m_prompt_file = prompt_file;
 
-            speech_synth.SetOutputToDefaultAudioDevice();
+            m_speech_synth.SetOutputToDefaultAudioDevice();
         }
 
-        public async Task<string> generateResponse(string message)
+        /// <summary>
+        /// generate a response from the given system prompt and user message.
+        /// </summary>
+        /// <returns> the first message in the generated messages collection. </returns>
+        public async Task<string> generateResponse(string prompt, string message)
         {
-            var result = await open_ai_service.ChatCompletion.CreateCompletion(
+            var result = await m_open_ai_service.ChatCompletion.CreateCompletion(
                 new()
                 {
                     Messages = new List<ChatMessage>
@@ -39,21 +53,31 @@ namespace TTS
                         ChatMessage.FromUser(message)
                     },
                     Model = Models.ChatGpt3_5Turbo,
-                    MaxTokens=200
+                    MaxTokens=600
                 });
 
             return result.Choices.First().Message.Content;
         }
 
-        public void speakResponse(string message)
+        /// <summary>
+        /// reads out loud the passed string, using SpeechSynthesis.
+        /// </summary>
+        public void speakMessage(string message)
         {
-            string speak_ssml = File.ReadAllText(prompt_file).Replace("[RESPONSE]", message);
-            speech_synth.SpeakSsmlAsync(speak_ssml);
+            string speak_ssml = File.ReadAllText(m_prompt_file).Replace("[RESPONSE]", message);
+            m_speech_synth.SpeakSsmlAsync(speak_ssml);
         }
 
-        IOpenAIService open_ai_service;
-        SpeechSynthesizer speech_synth = new();
-        string prompt;
-        string prompt_file;
+        /// <summary>
+        /// combines generateResponse and speakResponse.
+        /// </summary>
+        public async Task speakResponse(string prompt, string message)
+        {
+            speakMessage(await generateResponse(prompt, message));
+        }
+
+        IOpenAIService m_open_ai_service;
+        SpeechSynthesizer m_speech_synth = new();
+        string m_prompt_file;
     }
 }
