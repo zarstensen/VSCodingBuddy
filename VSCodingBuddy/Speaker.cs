@@ -11,7 +11,7 @@ using OpenAI.GPT3.ObjectModels;
 using System.Speech.Synthesis;
 using System.IO;
 
-namespace ExceptionHelper
+namespace VSCodingBuddy
 {
     /// <summary>
     /// Class for handling an OpenAIService and SpeechSynthesizer instance.

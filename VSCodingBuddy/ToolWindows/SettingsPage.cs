@@ -5,8 +5,9 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Forms;
 
-namespace ExceptionHelper.ToolWindows
+namespace VSCodingBuddy.ToolWindows
 {
     public record SpeakerPersonality(string CompilePrompt, string ExceptionPrompt);
 
@@ -14,10 +15,12 @@ namespace ExceptionHelper.ToolWindows
     /// settings for the VSCodingBuddy extension
     /// </summary>
     [ComVisible(true)]
+    [Guid("1FA49636-E0C4-419C-A264-D8015F920809")]
     public class SettingsPage : DialogPage
     {
-        public const string Category = "VSCodingBuddy";
         
+        public const string Category = "VSCodingBuddy";
+
         [Category(Category)]
         [DisplayName("OpenAI API Key")]
         [Description("The openai API key, to be used, when requesting prompt completions. (Requires restart to be updated)")]
