@@ -16,6 +16,9 @@ using System.IO;
 using Microsoft.VisualStudio.Threading;
 using System.Windows.Shapes;
 using VSCodingBuddy.ToolWindows;
+using System.Linq;
+using System.Windows.Documents;
+using System.Collections.Generic;
 
 namespace VSCodingBuddy
 {
@@ -103,39 +106,53 @@ namespace VSCodingBuddy
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [Guid(PackageGuids.ExceptionHelperString)]
     [ProvideOptionPage(typeof(SettingsPage),
-        SettingsPage.Category, "VSCodingBuddy Page", 0, 0, true)]
+        Vsix.Name, "General", 0, 0, true)]
+    [ProvideOptionPage(typeof(PersonalitiesPage),
+        Vsix.Name, "Personalities", 0, 0, true)]
     [ProvideAutoLoad(UIContextGuids80.SolutionHasSingleProject, PackageAutoLoadFlags.BackgroundLoad)]
     [ProvideAutoLoad(UIContextGuids80.SolutionHasMultipleProjects, PackageAutoLoadFlags.BackgroundLoad)]
+    [ProvideAutoLoad(UIContextGuids80.SolutionBuilding, PackageAutoLoadFlags.BackgroundLoad)]
     public sealed class VSCodingBuddyPackage : AsyncPackage
     {
+        const int ERR_LIST_MAX_CHECKS = 50;
+        const int ERR_MSG_MAX_LEN = 200;
+
         Speaker? error_speaker;
+
+        List<string> prev_err_codes = new();
+        Random rng = new();
+
         SettingsPage settings;
+        PersonalitiesPage personalities;
+        
         ExceptionEvent exception_event = new();
         CompileErrorEvent compile_error_event = new();
         NewProjectEvent new_project_event = new();
+        
         IVsSolutionBuildManager build_manager;
         string vsix_path;
 
-        protected void updateSpeaker(string new_key)
+        private void updateSpeaker(SettingsPage new_settings)
         {
             try
             {
-                error_speaker = new(new_key,
+                error_speaker = new(new_settings.OpenAIKey,
                         $"{vsix_path}/Phrase.ssml");
             }
-            catch (ArgumentNullException ex) { }
+            catch (ArgumentNullException) { }
         }
 
         protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
             // load settings
             settings = (SettingsPage)GetDialogPage(typeof(SettingsPage));
+            personalities = (PersonalitiesPage)GetDialogPage(typeof(PersonalitiesPage));
 
             vsix_path = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
 
-            settings.OnKeyUpdate += updateSpeaker;
+            settings.OnApplySettings += updateSpeaker;
 
-            updateSpeaker(settings.OpenAIKey);
+            updateSpeaker(settings);
 
             await this.RegisterCommandsAsync();
 
@@ -151,8 +168,22 @@ namespace VSCodingBuddy
             {
                 _ = JoinableTaskFactory.RunAsync(async () =>
                 {
+                    if (settings.ExceptionChance == 0)
+                        return;
+
+                    // use rng to determine whether the current compile error should be processed.
+
+                    if (rng.Next(1, settings.ExceptionChance) > 1)
+                        return;
+
+                    if (!personalities.Personalities.ContainsKey(settings.Personality))
+                        return;
+
                     args.GetExceptionDescription(out string exception_description);
-                    await error_speaker?.speakResponse($"{settings.Personalities[settings.Personality].ExceptionPrompt}. Keep the responses to no more than 1000 characters, preferably less.", exception_description);
+                    await error_speaker?.speakResponse(
+                        $"{personalities.Personalities[settings.Personality].ExceptionPrompt}. Keep the responses to no more than 1000 characters, preferably less.",
+                        exception_description,
+                        settings.MaxTokens);
                 });
             };
 
@@ -194,24 +225,59 @@ namespace VSCodingBuddy
             {
                 _ = JoinableTaskFactory.RunAsync(async () =>
                 {
+                    if (settings.BuildErrorChance == 0)
+                        return;
+
+                    // use rng to determine whether the current compile error should be processed.
+
+                    if (rng.Next(1, settings.BuildErrorChance) > 1)
+                        return;
+
+                    // ignore if the currently selected personality does not exist.
+
+                    if (!personalities.Personalities.ContainsKey(settings.Personality))
+                        return;
+
                     await JoinableTaskFactory.SwitchToMainThreadAsync();
 
                     // get the compile errors, by getting the entries in the error list.
                     var dte = (await GetServiceAsync(typeof(DTE))) as DTE2;
 
-                    var err_items = dte.ToolWindows.ErrorList.ErrorItems;
+                    var err_list = dte.ToolWindows.ErrorList;
 
-                    if (err_items.Count == 0)
+                    int list_checks = 0;
+
+                    // the error list does not update instantly, so periodically check the error items count, until it is greater than 0
+                    // as the error list then will contain the errors the build produced.
+                    //
+                    // in case something has gone wrong, and this method is fired,
+                    // even though no errors exists, this while loop is also limited to a maximum number of iterations before it stops
+                    while(err_list.ErrorItems.Count == 0 && list_checks++ < ERR_LIST_MAX_CHECKS)
+                        await Task.Delay(100);
+
+                    if (err_list.ErrorItems.Count == 0)
                         return;
 
+                    var err_list_entries = (err_list as IErrorList).TableControl.Entries
+                    .Select((e, i) => new {Entry = e, Index = i + 1})
+                    .ToDictionary(it => it.Index, it => it.Entry);
+
+                    var err_items = err_list.ErrorItems;
                     int line_range = settings.LineRange;
 
                     string code_snippet = "";
                     string error_messages = "";
 
+                    List<string> err_codes = new();
+
                     for (int i = 0; i < Math.Min(err_items.Count, settings.CompileMessageCount); i++)
                     {
                         var item = err_items.Item(i + 1);
+
+                        // retrieve the error code, to be used when checking if this build scenario has already occured.
+
+                        err_list_entries[i + 1].TryGetValue("errorcode", out object code);
+                        err_codes.Add(code as string);
 
                         // generate code snippet form first error.
                         if (i == 0)
@@ -231,12 +297,44 @@ namespace VSCodingBuddy
                         error_messages += item.Description + '\n';
                     }
 
-                    if (error_messages.Length > 200)
-                        error_messages = error_messages.Substring(0, 200);
+                    bool speak;
+
+                    if (settings.AvoidRepeat)
+                    {
+                        speak = false;
+
+                        // check if the previously used error types are the same as the current ones.
+
+                        if (err_codes.Count == prev_err_codes.Count)
+                        {
+                            for (int i = 0; i < err_codes.Count; i++)
+                            {
+                                if (err_codes[i] != prev_err_codes[i])
+                                {
+                                    speak = true;
+                                    break;
+                                }
+                            }
+
+                        }
+                        else
+                            speak = true;
+                    }
+                    else
+                        speak = true;
+
+                    prev_err_codes = err_codes;
+
+                    if (!speak)
+                        return;
+
+                    if (error_messages.Length > ERR_MSG_MAX_LEN)
+                        error_messages = error_messages.Substring(0, ERR_MSG_MAX_LEN);
 
                     await error_speaker.speakResponse(
-                $"{settings.Personalities[settings.Personality].CompilePrompt}. The error messages [MSG] will exist above a code snippet [CODE], where the error occurred. Keep the responses to no more than 1000 characters, preferably less.",
-                $"[MSG]\n{error_messages}\n[CODE]\n{code_snippet}");
+                $"{personalities.Personalities[settings.Personality].CompilePrompt}. The error messages [MSG] will exist above a code snippet [CODE], where the error occurred. Keep the responses to no more than 1000 characters, preferably less.",
+                $"[MSG]\n{error_messages}\n[CODE]\n{code_snippet}",
+                settings.MaxTokens);
                 });
             };
         }

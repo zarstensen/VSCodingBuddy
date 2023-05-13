@@ -42,7 +42,7 @@ namespace VSCodingBuddy
         /// generate a response from the given system prompt and user message.
         /// </summary>
         /// <returns> the first message in the generated messages collection. </returns>
-        public async Task<string> generateResponse(string prompt, string message)
+        public async Task<string> generateResponse(string prompt, string message, int max_tokens)
         {
             var result = await m_open_ai_service.ChatCompletion.CreateCompletion(
                 new()
@@ -53,7 +53,7 @@ namespace VSCodingBuddy
                         ChatMessage.FromUser(message)
                     },
                     Model = Models.ChatGpt3_5Turbo,
-                    MaxTokens=600
+                    MaxTokens=max_tokens
                 });
 
             return result.Choices.First().Message.Content;
@@ -71,9 +71,9 @@ namespace VSCodingBuddy
         /// <summary>
         /// combines generateResponse and speakResponse.
         /// </summary>
-        public async Task speakResponse(string prompt, string message)
+        public async Task speakResponse(string prompt, string message, int max_tokens)
         {
-            speakMessage(await generateResponse(prompt, message));
+            speakMessage(await generateResponse(prompt, message, max_tokens));
         }
 
         IOpenAIService m_open_ai_service;
