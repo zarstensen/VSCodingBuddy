@@ -65,7 +65,11 @@ Additional options can be found under the General options page.
 
 - [Betalgo.OpenAI](https://betalgo.github.io/openai/) (OpenAI API)
 - [System.Speech](https://www.nuget.org/packages/System.Speech/) (Text To Speech)
-- See visual studio solution for all dependencies
+- See visual studio solution in the github repository for all dependencies
+
+## Github Repository
+
+Right here -> https://github.com/karstensensensen/VSCodingBuddy
 
 ## License
 See LICENSE.TXT
