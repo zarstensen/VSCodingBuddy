@@ -34,7 +34,7 @@ Limit number of tokens used using a number of strategies.
 
 ## Setup
 
-In order to use this extension, and OpenAI API key is needed.
+In order to use this extension, an OpenAI API key is needed.
 
 For a guide to retrieve this key, please see the OpenAI Setup section.
 
