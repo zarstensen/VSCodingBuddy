@@ -11,7 +11,7 @@ namespace VSCodingBuddy
         public const string Name = "VSCodingBuddy";
         public const string Description = @"Helpful AI messages when the program wont work :)";
         public const string Language = "en-US";
-        public const string Version = "1.0.0.1";
+        public const string Version = "1.1.0.5";
         public const string Author = "zarstensen";
         public const string Tags = "";
     }

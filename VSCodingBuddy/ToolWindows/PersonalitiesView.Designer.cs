@@ -1,6 +1,6 @@
 ﻿namespace VSCodingBuddy.ToolWindows
 {
-    partial class SettingsView
+    partial class PersonalitiesView
     {
         /// <summary> 
         /// Required designer variable.
@@ -29,7 +29,9 @@
         private void InitializeComponent()
         {
             this.PersonalitiesBox = new System.Windows.Forms.GroupBox();
-            this.UpdateButton = new System.Windows.Forms.Button();
+            this.CompressCompileError = new System.Windows.Forms.Button();
+            this.CompressException = new System.Windows.Forms.Button();
+            this.SaveButton = new System.Windows.Forms.Button();
             this.NameTextBox = new System.Windows.Forms.TextBox();
             this.NameLabel = new System.Windows.Forms.Label();
             this.CompileErrorTextArea = new System.Windows.Forms.TextBox();
@@ -46,7 +48,9 @@
             // 
             this.PersonalitiesBox.AutoSize = true;
             this.PersonalitiesBox.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
-            this.PersonalitiesBox.Controls.Add(this.UpdateButton);
+            this.PersonalitiesBox.Controls.Add(this.CompressCompileError);
+            this.PersonalitiesBox.Controls.Add(this.CompressException);
+            this.PersonalitiesBox.Controls.Add(this.SaveButton);
             this.PersonalitiesBox.Controls.Add(this.NameTextBox);
             this.PersonalitiesBox.Controls.Add(this.NameLabel);
             this.PersonalitiesBox.Controls.Add(this.CompileErrorTextArea);
@@ -58,20 +62,40 @@
             this.PersonalitiesBox.Controls.Add(this.ExceptionPromptLabel);
             this.PersonalitiesBox.Location = new System.Drawing.Point(3, 0);
             this.PersonalitiesBox.Name = "PersonalitiesBox";
-            this.PersonalitiesBox.Size = new System.Drawing.Size(536, 299);
+            this.PersonalitiesBox.Size = new System.Drawing.Size(536, 321);
             this.PersonalitiesBox.TabIndex = 0;
             this.PersonalitiesBox.TabStop = false;
             this.PersonalitiesBox.Text = "Personalities";
             // 
-            // UpdateButton
+            // CompressCompileError
             // 
-            this.UpdateButton.Location = new System.Drawing.Point(124, 91);
-            this.UpdateButton.Name = "UpdateButton";
-            this.UpdateButton.Size = new System.Drawing.Size(112, 23);
-            this.UpdateButton.TabIndex = 10;
-            this.UpdateButton.Text = "Update";
-            this.UpdateButton.UseVisualStyleBackColor = true;
-            this.UpdateButton.Click += new System.EventHandler(this.UpdateButton_Click);
+            this.CompressCompileError.Location = new System.Drawing.Point(242, 233);
+            this.CompressCompileError.Name = "CompressCompileError";
+            this.CompressCompileError.Size = new System.Drawing.Size(112, 23);
+            this.CompressCompileError.TabIndex = 12;
+            this.CompressCompileError.Text = "Compress";
+            this.CompressCompileError.UseVisualStyleBackColor = true;
+            this.CompressCompileError.Click += new System.EventHandler(this.CompressCompileError_Click);
+            // 
+            // CompressException
+            // 
+            this.CompressException.Location = new System.Drawing.Point(242, 158);
+            this.CompressException.Name = "CompressException";
+            this.CompressException.Size = new System.Drawing.Size(112, 23);
+            this.CompressException.TabIndex = 11;
+            this.CompressException.Text = "Compress";
+            this.CompressException.UseVisualStyleBackColor = true;
+            this.CompressException.Click += new System.EventHandler(this.CompressException_Click);
+            // 
+            // SaveButton
+            // 
+            this.SaveButton.Location = new System.Drawing.Point(124, 91);
+            this.SaveButton.Name = "SaveButton";
+            this.SaveButton.Size = new System.Drawing.Size(112, 23);
+            this.SaveButton.TabIndex = 10;
+            this.SaveButton.Text = "Save";
+            this.SaveButton.UseVisualStyleBackColor = true;
+            this.SaveButton.Click += new System.EventHandler(this.UpdateButton_Click);
             // 
             // NameTextBox
             // 
@@ -79,6 +103,7 @@
             this.NameTextBox.Name = "NameTextBox";
             this.NameTextBox.Size = new System.Drawing.Size(112, 22);
             this.NameTextBox.TabIndex = 9;
+            this.NameTextBox.TextChanged += new System.EventHandler(this.NameTextBox_TextChanged);
             // 
             // NameLabel
             // 
@@ -92,11 +117,12 @@
             // CompileErrorTextArea
             // 
             this.CompileErrorTextArea.AcceptsReturn = true;
-            this.CompileErrorTextArea.Location = new System.Drawing.Point(5, 240);
+            this.CompileErrorTextArea.Location = new System.Drawing.Point(5, 262);
             this.CompileErrorTextArea.Multiline = true;
             this.CompileErrorTextArea.Name = "CompileErrorTextArea";
             this.CompileErrorTextArea.Size = new System.Drawing.Size(524, 38);
             this.CompileErrorTextArea.TabIndex = 4;
+            this.CompileErrorTextArea.TextChanged += new System.EventHandler(this.CompileErrorTextArea_TextChanged);
             // 
             // DeleteButton
             // 
@@ -132,7 +158,7 @@
             // CompileErrorPromptLabel
             // 
             this.CompileErrorPromptLabel.AutoSize = true;
-            this.CompileErrorPromptLabel.Location = new System.Drawing.Point(3, 221);
+            this.CompileErrorPromptLabel.Location = new System.Drawing.Point(3, 236);
             this.CompileErrorPromptLabel.Name = "CompileErrorPromptLabel";
             this.CompileErrorPromptLabel.Size = new System.Drawing.Size(135, 16);
             this.CompileErrorPromptLabel.TabIndex = 3;
@@ -141,11 +167,12 @@
             // ExceptionTextArea
             // 
             this.ExceptionTextArea.AcceptsReturn = true;
-            this.ExceptionTextArea.Location = new System.Drawing.Point(6, 180);
+            this.ExceptionTextArea.Location = new System.Drawing.Point(6, 187);
             this.ExceptionTextArea.Multiline = true;
             this.ExceptionTextArea.Name = "ExceptionTextArea";
             this.ExceptionTextArea.Size = new System.Drawing.Size(523, 38);
             this.ExceptionTextArea.TabIndex = 2;
+            this.ExceptionTextArea.TextChanged += new System.EventHandler(this.ExceptionTextArea_TextChanged);
             // 
             // ExceptionPromptLabel
             // 
@@ -156,12 +183,12 @@
             this.ExceptionPromptLabel.TabIndex = 1;
             this.ExceptionPromptLabel.Text = "Exception Prompt";
             // 
-            // SettingsView
+            // PersonalitiesView
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.Controls.Add(this.PersonalitiesBox);
-            this.Name = "SettingsView";
+            this.Name = "PersonalitiesView";
             this.Size = new System.Drawing.Size(540, 388);
             this.PersonalitiesBox.ResumeLayout(false);
             this.PersonalitiesBox.PerformLayout();
@@ -181,6 +208,8 @@
         private System.Windows.Forms.TextBox CompileErrorTextArea;
         private System.Windows.Forms.TextBox NameTextBox;
         private System.Windows.Forms.Label NameLabel;
-        private System.Windows.Forms.Button UpdateButton;
+        private System.Windows.Forms.Button SaveButton;
+        private System.Windows.Forms.Button CompressException;
+        private System.Windows.Forms.Button CompressCompileError;
     }
 }

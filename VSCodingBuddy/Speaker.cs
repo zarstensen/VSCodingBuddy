@@ -26,18 +26,39 @@ namespace VSCodingBuddy
         /// ssml file that will be used to generate the final text to speech, text.
         /// The file should contain a [RESPONSE] field, which will be replaced by the openai prompt later.
         /// </param>
-        public Speaker(string api_key, string prompt_file)
+
+        public Speaker(string api_key)
         {
             m_open_ai_service = new OpenAIService(new OpenAiOptions()
             {
                 ApiKey = api_key
             });
 
-            m_prompt_file = prompt_file;
-
             m_speech_synth.SetOutputToDefaultAudioDevice();
+            m_speech_synth.SelectVoiceByHints(VoiceGender.Male);
         }
 
+        /// <summary>
+        /// makes use of the gpt-3.5-turbo model, to reduce the number of tokens in the passed prompt.
+        /// this should in turn reduce the token / cost pr. error message handled.
+        /// </summary>
+        /// <returns> compressed / shortened prompt </returns>
+        public async Task<string> compressPrompt(string prompt)
+        {
+            var result = await m_open_ai_service.ChatCompletion.CreateCompletion(
+                new()
+                {
+                    Messages = new List<ChatMessage>
+                    {
+                        ChatMessage.FromSystem("Compress the following prompt using as few tokens as possible, whilst the original intent of the prompt is still comprehendible by the gpt-3.5-turbo openai model. The response should only contain the compressed prompt, and nothing else."),
+                        ChatMessage.FromUser($"[PROMPT]\n{prompt}\n[END PROMPT]")
+                    },
+                    Model = Models.ChatGpt3_5Turbo
+                });
+
+            return result.Choices.First().Message.Content;
+        }
+        
         /// <summary>
         /// generate a response from the given system prompt and user message.
         /// </summary>
@@ -64,8 +85,8 @@ namespace VSCodingBuddy
         /// </summary>
         public void speakMessage(string message)
         {
-            string speak_ssml = File.ReadAllText(m_prompt_file).Replace("[RESPONSE]", message);
-            m_speech_synth.SpeakSsmlAsync(speak_ssml);
+            m_speech_synth.SpeakAsyncCancelAll();
+            m_speech_synth.SpeakAsync(message);
         }
 
         /// <summary>
@@ -78,6 +99,5 @@ namespace VSCodingBuddy
 
         IOpenAIService m_open_ai_service;
         SpeechSynthesizer m_speech_synth = new();
-        string m_prompt_file;
     }
 }

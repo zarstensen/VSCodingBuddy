@@ -19,67 +19,12 @@ using VSCodingBuddy.ToolWindows;
 using System.Linq;
 using System.Windows.Documents;
 using System.Collections.Generic;
+using System.Globalization;
+using Microsoft.VisualStudio.VSHelp;
+using Microsoft.VisualStudio.RpcContracts;
 
 namespace VSCodingBuddy
 {
-    public class NewProjectEvent : IVsSolutionEvents
-    {
-        public Action<IVsHierarchy>? OnProjectAdd;
-
-        public int OnAfterOpenProject(IVsHierarchy pHierarchy, int fAdded)
-        {
-            if (fAdded == 1)
-                OnProjectAdd?.Invoke(pHierarchy);
-
-            return 0;
-        }
-
-        #region unused
-        public int OnQueryCloseProject(IVsHierarchy pHierarchy, int fRemoving, ref int pfCancel) => 0;
-
-        public int OnBeforeCloseProject(IVsHierarchy pHierarchy, int fRemoved) => 0;
-
-        public int OnAfterLoadProject(IVsHierarchy pStubHierarchy, IVsHierarchy pRealHierarchy) => 0;
-
-        public int OnQueryUnloadProject(IVsHierarchy pRealHierarchy, ref int pfCancel) => 0;
-
-        public int OnBeforeUnloadProject(IVsHierarchy pRealHierarchy, IVsHierarchy pStubHierarchy) => 0;
-
-        public int OnAfterOpenSolution(object pUnkReserved, int fNewSolution) => 0;
-
-        public int OnQueryCloseSolution(object pUnkReserved, ref int pfCancel) => 0;
-
-        public int OnBeforeCloseSolution(object pUnkReserved) => 0;
-
-        public int OnAfterCloseSolution(object pUnkReserved) => 0;
-        #endregion
-    }
-
-    /// <summary>
-    /// IVsBuildStatusCallback implementation, that raises OnCompileError, when an advised project configuration fails to build.
-    /// </summary>
-    public class CompileErrorEvent : IVsBuildStatusCallback
-    {
-        /// <summary>
-        /// Raised when the compiler encounters an error.
-        /// </summary>
-        public Action? OnCompileError;
-        public int BuildEnd(int fSuccess)
-        {
-            if (fSuccess != 1)
-                OnCompileError?.Invoke();
-
-            return 0;
-        }
-
-        #region unused
-        public int BuildBegin(ref int pfContinue) => 0;
-
-
-        public int Tick(ref int pfContinue) => 0;
-        #endregion
-    }
-
     /// <summary>
     /// IDebugEventCallback2 implementation, that raises OnException, when the debugger detects an unhandled exception.
     /// </summary>
@@ -109,234 +54,296 @@ namespace VSCodingBuddy
         Vsix.Name, "General", 0, 0, true)]
     [ProvideOptionPage(typeof(PersonalitiesPage),
         Vsix.Name, "Personalities", 0, 0, true)]
-    [ProvideAutoLoad(UIContextGuids80.SolutionHasSingleProject, PackageAutoLoadFlags.BackgroundLoad)]
-    [ProvideAutoLoad(UIContextGuids80.SolutionHasMultipleProjects, PackageAutoLoadFlags.BackgroundLoad)]
+    [ProvideProfile(typeof(PersonalitiesPage), Vsix.Name, "Personalities", 0, 0, true)]
     [ProvideAutoLoad(UIContextGuids80.SolutionBuilding, PackageAutoLoadFlags.BackgroundLoad)]
+    [ProvideAutoLoad(UIContextGuids80.Debugging, PackageAutoLoadFlags.BackgroundLoad)]
     public sealed class VSCodingBuddyPackage : AsyncPackage
     {
-        const int ERR_LIST_MAX_CHECKS = 50;
-        const int ERR_MSG_MAX_LEN = 200;
-
-        Speaker? error_speaker;
-
-        List<string> prev_err_codes = new();
-        Random rng = new();
-
-        SettingsPage settings;
-        PersonalitiesPage personalities;
+        static readonly Random RNG = new();
         
-        ExceptionEvent exception_event = new();
-        CompileErrorEvent compile_error_event = new();
-        NewProjectEvent new_project_event = new();
-        
-        IVsSolutionBuildManager build_manager;
-        string vsix_path;
+        public static string VsixPath => System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
 
-        private void updateSpeaker(SettingsPage new_settings)
-        {
-            try
-            {
-                error_speaker = new(new_settings.OpenAIKey,
-                        $"{vsix_path}/Phrase.ssml");
-            }
-            catch (ArgumentNullException) { }
-        }
+        Speaker? m_error_speaker;
+
+        SettingsPage m_settings;
+        PersonalitiesPage m_personalities;
+        
+        ExceptionEvent m_exception_event = new();
+
+        EnvDTE.BuildEvents m_build_events;
+        IVsActivityLog m_activity_log;
+
+        List<string> m_prev_err_codes = new();
+        bool m_checking_err_list;
+        DateTime m_err_list_check_start;
+
 
         protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
+            await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+
+            // setup logging
+
+            m_activity_log = (await GetServiceAsync(typeof(SVsActivityLog))) as IVsActivityLog;
+
             // load settings
-            settings = (SettingsPage)GetDialogPage(typeof(SettingsPage));
-            personalities = (PersonalitiesPage)GetDialogPage(typeof(PersonalitiesPage));
 
-            vsix_path = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
+            m_personalities = (PersonalitiesPage)GetDialogPage(typeof(PersonalitiesPage));
+            m_settings = (SettingsPage)GetDialogPage(typeof(SettingsPage));
+            m_settings.PersonalitiesPage = m_personalities;
 
-            settings.OnApplySettings += updateSpeaker;
 
-            updateSpeaker(settings);
+            m_settings.OnApplySettings += updateSpeaker;
+
+            updateSpeaker(m_settings);
 
             await this.RegisterCommandsAsync();
-
-            await JoinableTaskFactory.SwitchToMainThreadAsync();
 
             // setup exception event
 
             var ivs_debugger = (await GetServiceAsync(typeof(IVsDebugger))) as IVsDebugger;
             
-            ivs_debugger.AdviseDebugEventCallback(exception_event);
+            ivs_debugger.AdviseDebugEventCallback(m_exception_event);
 
-            exception_event.OnException += (s, args) =>
+            m_exception_event.OnException += handleException;
+
+            // setup build error event
+
+            var dte = (await GetServiceAsync(typeof(DTE))) as DTE2;
+            m_build_events = dte.Events.BuildEvents;
+
+            m_build_events.OnBuildDone += handleBuildDone;
+        }
+
+        /// <summary>
+        /// creates a new Speaker instance, which uses the latest OpenAIKey stored in the settings.
+        /// </summary>
+        private void updateSpeaker(SettingsPage new_settings)
+        {
+            try
             {
-                _ = JoinableTaskFactory.RunAsync(async () =>
-                {
-                    if (settings.ExceptionChance == 0)
-                        return;
+                m_error_speaker = new(new_settings.OpenAIKey);
+                m_personalities.Speaker = m_error_speaker;
+            }
+            catch (ArgumentNullException) { }
+        }
 
-                    // use rng to determine whether the current compile error should be processed.
+        /// <summary>
+        /// invoked whenever a build has finished.
+        /// 
+        /// calls checkErrorList in a separate method, or if it is already running, resets the error list check interval.
+        /// 
+        /// </summary>
+        /// <param name="Scope"></param>
+        /// <param name="Action"></param>
+        private void handleBuildDone(vsBuildScope Scope, vsBuildAction Action)
+        {
+            // we are not sure here if the build has failed,
+            // and we are unable to use IVsBuildStatusCallback, as it simply just doesn't work for some weird reason.
+            // 
+            // instead we periodically check the ErrorList for a set time interval, until some error items are detected.
+            // if no error items are detected within this interval, it is assumed the build was succesful.
+            //
+            // To avoid double detects, if HandleBuildDone is invoked, whilst another HandleBuildDone is already checking the error list,
+            // the timer interval is simply reset.
 
-                    if (rng.Next(1, settings.ExceptionChance) > 1)
-                        return;
+            if (!m_checking_err_list)
+                // checkErrorList is a separate method, to avoid indent hell.
+                _ = JoinableTaskFactory.RunAsync(checkErrorList);
+            else
+                m_err_list_check_start = DateTime.Now;
+        }
 
-                    if (!personalities.Personalities.ContainsKey(settings.Personality))
-                        return;
+        /// <summary>
+        /// checks if the error list has any entries, within the BUILD_CHECK_INTERVAL
+        /// if it has, and the errors were unique from the last check, then call trySpeakCompileError.
+        /// </summary>
+        private async Task checkErrorList()
+        {
+            bool missing_reset = !m_checking_err_list;
+            m_checking_err_list = true;
 
-                    args.GetExceptionDescription(out string exception_description);
-                    await error_speaker?.speakResponse(
-                        $"{personalities.Personalities[settings.Personality].ExceptionPrompt}. Keep the responses to no more than 1000 characters, preferably less.",
-                        exception_description,
-                        settings.MaxTokens);
-                });
-            };
+            await JoinableTaskFactory.SwitchToMainThreadAsync();
+            // get the compile errors, by getting the entries in the error list.
+            var dte = (await GetServiceAsync(typeof(DTE))) as DTE2;
 
-            // setup compile build error event
-            var solution = (await GetServiceAsync(typeof(SVsSolution))) as IVsSolution;
-            build_manager = (await GetServiceAsync(typeof(SVsSolutionBuildManager))) as IVsSolutionBuildManager;
+            var err_list = dte.ToolWindows.ErrorList;
 
+            if(missing_reset)
+                m_err_list_check_start = DateTime.Now;
 
-            Guid iterated_projects = Guid.Empty;
-            solution.GetProjectEnum((uint)__VSENUMPROJFLAGS.EPF_ALLPROJECTS, ref iterated_projects, out IEnumHierarchies projects);
-            solution.AdviseSolutionEvents(new_project_event, out uint _);
-
-            new_project_event.OnProjectAdd += (hierarchy) =>
+            // the error list does not update instantly, so periodically check the error items count, until it is greater than 0
+            // as the error list then will contain the errors the build produced.
+            //
+            // in case something has gone wrong, and this method is fired,
+            // even though no errors exists, this while loop is also limited to a maximum number of iterations before it stops
+            while (err_list.ErrorItems.Count == 0 && DateTime.Now < m_err_list_check_start.AddMilliseconds(m_settings.ErrorListCheckInterval))
             {
-                _ = JoinableTaskFactory.RunAsync(async () =>
-                {
-                    await JoinableTaskFactory.SwitchToMainThreadAsync();
-
-                    IVsProjectCfg[] project_cfg = new IVsProjectCfg[1];
-
-                    build_manager.FindActiveProjectCfg(IntPtr.Zero, IntPtr.Zero, hierarchy, project_cfg);
-                    project_cfg[0].get_BuildableProjectCfg(out IVsBuildableProjectCfg buildable_project_cfg);
-
-                    buildable_project_cfg.AdviseBuildStatusCallback(compile_error_event, out uint _);
-                });
-            };
-
-            IVsHierarchy[] project = new IVsHierarchy[1];
-            IVsProjectCfg[] project_cfg = new IVsProjectCfg[1];
-
-            while(projects.Next(1, project, out uint _) == 0)
-            {
-                build_manager.FindActiveProjectCfg(IntPtr.Zero, IntPtr.Zero, project[0], project_cfg);
-                project_cfg[0].get_BuildableProjectCfg(out IVsBuildableProjectCfg buildable_project_cfg);
-                buildable_project_cfg.AdviseBuildStatusCallback(compile_error_event, out uint _);
+                print("Checking error list");
+                System.Threading.Thread.Sleep(50);
             }
 
-            compile_error_event.OnCompileError += () =>
+            m_checking_err_list = false;
+
+            // either the error list has no items, or is full of warnings,
+            // both of which are seen as succesful builds.
+
+            if (err_list.ErrorItems.Count == 0)
+                return;
+
+            // this dictionary is used for retrieving the error codes of the errors.
+            var err_list_entries = (err_list as IErrorList).TableControl.Entries
+            .Select((e, i) => new { Entry = e, Index = i + 1 })
+            .ToDictionary(it => it.Index, it => it.Entry);
+
+            var err_items = err_list.ErrorItems;
+
+            List<string> err_codes = new();
+            List<ErrorItem> filtered_err_items = new();
+
+            for (int i = 0; i < err_items.Count && filtered_err_items.Count < m_settings.CompileMessageCount; i++)
             {
-                _ = JoinableTaskFactory.RunAsync(async () =>
+                var item = err_items.Item(i + 1);
+
+                // ignore warnings.
+                if (item.ErrorLevel != vsBuildErrorLevel.vsBuildErrorLevelHigh)
+                    continue;
+
+                filtered_err_items.Add(item);
+
+                // retrieve the error code, to be used when checking if this build scenario has already occured.
+
+                err_list_entries[i + 1].TryGetValue("errorcode", out object code);
+                err_codes.Add(code as string);
+            }
+
+            // the error list contained no errors, therefore ignore this build.
+            if (filtered_err_items.Count == 0)
+                return;
+
+            // if the current error codes match exactly with the previous error codes, and AvoidRepeat is enabled,
+            // then the build message should not be read out loud.
+
+            bool speak;
+            
+            if (m_settings.AvoidRepeat)
+            {
+                speak = false;
+
+                // check if the previously used error types are the same as the current ones.
+
+                if (err_codes.Count == m_prev_err_codes.Count)
                 {
-                    if (settings.BuildErrorChance == 0)
-                        return;
-
-                    // use rng to determine whether the current compile error should be processed.
-
-                    if (rng.Next(1, settings.BuildErrorChance) > 1)
-                        return;
-
-                    // ignore if the currently selected personality does not exist.
-
-                    if (!personalities.Personalities.ContainsKey(settings.Personality))
-                        return;
-
-                    await JoinableTaskFactory.SwitchToMainThreadAsync();
-
-                    // get the compile errors, by getting the entries in the error list.
-                    var dte = (await GetServiceAsync(typeof(DTE))) as DTE2;
-
-                    var err_list = dte.ToolWindows.ErrorList;
-
-                    int list_checks = 0;
-
-                    // the error list does not update instantly, so periodically check the error items count, until it is greater than 0
-                    // as the error list then will contain the errors the build produced.
-                    //
-                    // in case something has gone wrong, and this method is fired,
-                    // even though no errors exists, this while loop is also limited to a maximum number of iterations before it stops
-                    while(err_list.ErrorItems.Count == 0 && list_checks++ < ERR_LIST_MAX_CHECKS)
-                        await Task.Delay(100);
-
-                    if (err_list.ErrorItems.Count == 0)
-                        return;
-
-                    var err_list_entries = (err_list as IErrorList).TableControl.Entries
-                    .Select((e, i) => new {Entry = e, Index = i + 1})
-                    .ToDictionary(it => it.Index, it => it.Entry);
-
-                    var err_items = err_list.ErrorItems;
-                    int line_range = settings.LineRange;
-
-                    string code_snippet = "";
-                    string error_messages = "";
-
-                    List<string> err_codes = new();
-
-                    for (int i = 0; i < Math.Min(err_items.Count, settings.CompileMessageCount); i++)
+                    for (int i = 0; i < err_codes.Count; i++)
                     {
-                        var item = err_items.Item(i + 1);
-
-                        // retrieve the error code, to be used when checking if this build scenario has already occured.
-
-                        err_list_entries[i + 1].TryGetValue("errorcode", out object code);
-                        err_codes.Add(code as string);
-
-                        // generate code snippet form first error.
-                        if (i == 0)
+                        if (err_codes[i] != m_prev_err_codes[i])
                         {
-                            using (StreamReader code_reader = new(item.FileName))
-                            {
-                                for (int j = 0; j < item.Line - line_range; j++)
-                                    await code_reader.ReadLineAsync();
-
-
-                                for (int j = 0; j < line_range * 2 && !code_reader.EndOfStream; j++)
-                                    code_snippet += await code_reader.ReadLineAsync() + '\n';
-
-                            }
-                        }
-
-                        error_messages += item.Description + '\n';
-                    }
-
-                    bool speak;
-
-                    if (settings.AvoidRepeat)
-                    {
-                        speak = false;
-
-                        // check if the previously used error types are the same as the current ones.
-
-                        if (err_codes.Count == prev_err_codes.Count)
-                        {
-                            for (int i = 0; i < err_codes.Count; i++)
-                            {
-                                if (err_codes[i] != prev_err_codes[i])
-                                {
-                                    speak = true;
-                                    break;
-                                }
-                            }
-
-                        }
-                        else
                             speak = true;
+                            break;
+                        }
                     }
-                    else
-                        speak = true;
+                }
+                else
+                    speak = true;
+            }
+            else
+                speak = true;
 
-                    prev_err_codes = err_codes;
+            m_prev_err_codes = err_codes;
 
-                    if (!speak)
-                        return;
+            if (speak)
+                await trySpeakCompileError(filtered_err_items);
+        }
 
-                    if (error_messages.Length > ERR_MSG_MAX_LEN)
-                        error_messages = error_messages.Substring(0, ERR_MSG_MAX_LEN);
+        /// <summary>
+        /// if the rng rolls a 1, this method uses the passed error_items list to generate a small code snippet
+        /// of where the latest build error occurred, as well as generating a list of the first error items in the error list.
+        /// 
+        /// </summary>
+        /// <param name="error_items"></param>
+        /// <returns></returns>
+        private async Task trySpeakCompileError(List<ErrorItem> error_items)
+        {
+            string code_snippet = "";
+            string error_messages = "";
 
-                    await error_speaker.speakResponse(
-                $"{personalities.Personalities[settings.Personality].CompilePrompt}. The error messages [MSG] will exist above a code snippet [CODE], where the error occurred. Keep the responses to no more than 1000 characters, preferably less.",
-                $"[MSG]\n{error_messages}\n[CODE]\n{code_snippet}",
-                settings.MaxTokens);
-                });
-            };
+            for (int i = 0; i < error_items.Count; i++)
+            {
+                var item = error_items[i];
+
+                // generate code snippet form first error.
+                if (i == 0)
+                {
+                    using (StreamReader code_reader = new(item.FileName))
+                    {
+                        for (int j = 0; j < item.Line - m_settings.LineRange; j++)
+                            await code_reader.ReadLineAsync();
+
+
+                        for (int j = 0; j < m_settings.LineRange * 2 && !code_reader.EndOfStream; j++)
+                        {
+                            string code_line = await code_reader.ReadLineAsync();
+
+                            if (code_line.Length > m_settings.CodeLineMaxLen)
+                                code_line = code_line.Substring(0, m_settings.CodeLineMaxLen) + " (truncated)";
+
+                            code_snippet += code_line + '\n';
+                        }
+                    }
+                }
+                
+                error_messages += item.Description + '\n';
+            }
+
+            // the error messages are truncated in order to reduce prompt token usage.
+            // TODO: this should be user configurable, and should be truncated in a smarter way
+            // TODO 2: the code snippets should also be truncated.
+
+            if (error_messages.Length > m_settings.ErrMsgMaxLen)
+                error_messages = error_messages.Substring(0, m_settings.ErrMsgMaxLen) + " (truncated)";
+
+            await m_error_speaker?.speakResponse(
+        $"[MSG] above [CODE], response should be max 1000 characters. Refrain from providing code in the response.\n{m_personalities.Personalities[m_settings.Personality].CompilePrompt}",
+        $"[MSG]\n{error_messages}\n[CODE]\n{code_snippet}",
+        m_settings.MaxTokens);
+        }
+
+        /// <summary>
+        /// Invoked whenever an exception is encountered by the debugger.
+        /// 
+        /// uses the passed IDebugExceptionEvent2 to get the exception message, and pass it on to the speaker instance,
+        /// if the rng rolls a 1.
+        /// 
+        /// </summary>
+        private void handleException(object sender, IDebugExceptionEvent2 args)
+        {
+            _ = JoinableTaskFactory.RunAsync(async () =>
+            {
+                if (m_settings.ExceptionChance == 0)
+                    return;
+
+                // use rng to determine whether the current compile error should be processed.
+
+                if (RNG.Next(1, m_settings.ExceptionChance) > 1)
+                    return;
+
+                if (!m_personalities.Personalities.ContainsKey(m_settings.Personality))
+                    return;
+
+                args.GetExceptionDescription(out string exception_description);
+
+                await m_error_speaker?.speakResponse(
+                    $"Response should be max 1000 characters. Refrain from providing code in the response.\n{m_personalities.Personalities[m_settings.Personality].ExceptionPrompt}",
+                    exception_description,
+                    m_settings.MaxTokens);
+            });
+        }
+
+        private void print(string str, __ACTIVITYLOG_ENTRYTYPE type = __ACTIVITYLOG_ENTRYTYPE.ALE_INFORMATION)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            m_activity_log.LogEntry((uint)type, ToString(), str);
         }
     }
 }

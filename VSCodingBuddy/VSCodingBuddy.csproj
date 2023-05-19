@@ -51,11 +51,11 @@
     <Compile Include="ToolWindows\PersonalitiesPage.cs">
       <SubType>Component</SubType>
     </Compile>
-    <Compile Include="ToolWindows\SettingsView.cs">
+    <Compile Include="ToolWindows\PersonalitiesView.cs">
       <SubType>UserControl</SubType>
     </Compile>
-    <Compile Include="ToolWindows\SettingsView.Designer.cs">
-      <DependentUpon>SettingsView.cs</DependentUpon>
+    <Compile Include="ToolWindows\PersonalitiesView.Designer.cs">
+      <DependentUpon>PersonalitiesView.cs</DependentUpon>
     </Compile>
     <Compile Include="VSCodingBuddyPackage.cs" />
     <Compile Include="source.extension.cs">
@@ -80,6 +80,10 @@
     </Content>
     <Content Include="Phrase.ssml">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+    <Content Include="Personalities.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <IncludeInVSIX>true</IncludeInVSIX>
     </Content>
     <None Include="source.extension.vsixmanifest">
@@ -150,8 +154,8 @@
     <Folder Include="Commands\" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="ToolWindows\SettingsView.resx">
-      <DependentUpon>SettingsView.cs</DependentUpon>
+    <EmbeddedResource Include="ToolWindows\PersonalitiesView.resx">
+      <DependentUpon>PersonalitiesView.cs</DependentUpon>
     </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
