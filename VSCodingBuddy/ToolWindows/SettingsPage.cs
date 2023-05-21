@@ -108,7 +108,7 @@ namespace VSCodingBuddy.ToolWindows
         /// <summary>
         /// Should be subscribed to in order to apply any updated settings in the settings page instance.
         /// </summary>
-        public Action<SettingsPage>? OnApplySettings;
+        public Action<SettingsPage> OnApplySettings;
 
         protected override void OnApply(PageApplyEventArgs e)
         {

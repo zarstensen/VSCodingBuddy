@@ -12,14 +12,14 @@ namespace VSCodingBuddy
     /// </summary>
     internal sealed partial class PackageGuids
     {
-        public const string ExceptionHelperString = "f59c7458-14cc-461a-a579-a7ba3aec003f";
-        public static Guid ExceptionHelper = new Guid(ExceptionHelperString);
+        public const string VSCodingBuddyString = "f59c7458-14cc-461a-a579-a7ba3aec003f";
+        public static Guid VSCodingBuddy = new Guid(VSCodingBuddyString);
     }
     /// <summary>
     /// Helper class that encapsulates all CommandIDs uses across VS Package.
     /// </summary>
     internal sealed partial class PackageIds
     {
-        public const int MyCommand = 0x0100;
+
     }
 }

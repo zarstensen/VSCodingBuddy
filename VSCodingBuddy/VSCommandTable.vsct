@@ -6,24 +6,8 @@
   <Include href="KnownImageIds.vsct"/>
   <Include href="VSGlobals.vsct"/>
 
-  <Commands package="ExceptionHelper">
-    <!--This section defines the elements the user can interact with, like a menu command or a button or combo box in a toolbar. -->
-    <Buttons>
-      <Button guid="ExceptionHelper" id="MyCommand" priority="0x0100" type="Button">
-        <Parent guid="VSMainMenu" id="View.DevWindowsGroup.OtherWindows.Group1"/>
-        <Icon guid="ImageCatalogGuid" id="ToolWindow" />
-        <CommandFlag>IconIsMoniker</CommandFlag>
-        <Strings>
-          <ButtonText>My Tool Window</ButtonText>
-          <LocCanonicalName>.View.MyToolWindow</LocCanonicalName>
-        </Strings>
-      </Button>
-    </Buttons>
-  </Commands>
-
   <Symbols>
-    <GuidSymbol name="ExceptionHelper" value="{f59c7458-14cc-461a-a579-a7ba3aec003f}">
-      <IDSymbol name="MyCommand" value="0x0100" />
+    <GuidSymbol name="VSCodingBuddy" value="{f59c7458-14cc-461a-a579-a7ba3aec003f}">
     </GuidSymbol>
   </Symbols>
 </CommandTable>

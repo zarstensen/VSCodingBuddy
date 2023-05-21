@@ -34,7 +34,7 @@ namespace VSCodingBuddy
         /// <summary>
         /// subscribe to this event, to receive the IDebugExceptionEvent2 information, when an unhandled exception is hit.
         /// </summary>
-        public EventHandler<IDebugExceptionEvent2>? OnException;
+        public EventHandler<IDebugExceptionEvent2> OnException;
 
         public int Event(IDebugEngine2 pEngine, IDebugProcess2 pProcess, IDebugProgram2 pProgram, IDebugThread2 pThread, IDebugEvent2 pEvent, ref Guid riidEvent, uint dwAttrib)
         {
@@ -50,7 +50,7 @@ namespace VSCodingBuddy
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [InstalledProductRegistration(Vsix.Name, Vsix.Description, Vsix.Version)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
-    [Guid(PackageGuids.ExceptionHelperString)]
+    [Guid(PackageGuids.VSCodingBuddyString)]
     [ProvideOptionPage(typeof(SettingsPage),
         Vsix.Name, "General", 0, 0, true)]
     [ProvideOptionPage(typeof(PersonalitiesPage),
@@ -117,7 +117,7 @@ namespace VSCodingBuddy
 
         public static string VsixPath => System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
 
-        Speaker? m_error_speaker;
+        Speaker m_error_speaker;
 
         SettingsPage m_settings;
         PersonalitiesPage m_personalities;
@@ -204,6 +204,10 @@ namespace VSCodingBuddy
             await JoinableTaskFactory.SwitchToMainThreadAsync();
 
             DTE2 dte = await GetServiceAsync(typeof(DTE)) as DTE2;
+
+            // this should never happen
+            if (dte == null)
+                return;
 
             OutputWindowPanes panes = dte.ToolWindows.OutputWindow.OutputWindowPanes;
 
