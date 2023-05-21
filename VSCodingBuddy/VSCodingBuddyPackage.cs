@@ -22,6 +22,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using Microsoft.VisualStudio.VSHelp;
 using Microsoft.VisualStudio.RpcContracts;
+using System.Text.RegularExpressions;
 
 namespace VSCodingBuddy
 {
@@ -56,11 +57,64 @@ namespace VSCodingBuddy
         Vsix.Name, "Personalities", 0, 0, true)]
     [ProvideProfile(typeof(PersonalitiesPage), Vsix.Name, "Personalities", 0, 0, true)]
     [ProvideAutoLoad(UIContextGuids80.SolutionBuilding, PackageAutoLoadFlags.BackgroundLoad)]
+    [ProvideAutoLoad(UIContextGuids80.SolutionExists, PackageAutoLoadFlags.BackgroundLoad)]
     [ProvideAutoLoad(UIContextGuids80.Debugging, PackageAutoLoadFlags.BackgroundLoad)]
     public sealed class VSCodingBuddyPackage : AsyncPackage
     {
         static readonly Random RNG = new();
-        
+        /// <summary>
+        /// This regex matches any build output, that contains any warning or error,
+        /// and groups 5 different sections of the line,
+        /// that are relevant to the warning / error.
+        /// 
+        /// The groups are as follows:
+        ///     Group 1:
+        ///         The project build number.
+        ///     Group 2:
+        ///         Origin, can either be a file path, containing line information, or an object if linking.
+        ///     Group 3:
+        ///         The log category, can be warning, error or others.
+        ///     Group 4:
+        ///         The warning or error code.
+        ///     Group 5:
+        ///         The warning or error message.
+        /// 
+        /// </summary>
+        static readonly Regex BUILD_LOG_ENTRY_REGEX = new(
+                @"^(\d+)>(.+?): (\w+) ([\w\d]+): (.+)$",
+                RegexOptions.Multiline);
+
+        /// <summary>
+        /// Following constants are the indicies that should be used,
+        /// when retrieving specific information from a BUILD_LOG_ENTRY_REGEX group list.
+        /// 
+        /// BLE: Build Log Entry
+        /// 
+        /// </summary>
+        const int BLE_PROJ_NUM = 1;
+        const int BLE_ORIGIN = 2;
+        const int BLE_CATEGORY = 3;
+        const int BLE_CODE = 4;
+        const int BLE_MSG = 5;
+
+        /// <summary>
+        /// number of groups the BUILD_LOG_ENTRY_REGEX should produce for a successful match.
+        /// </summary>
+        const int ENTRY_CAPTURE_COUNT = 6;
+
+        /// <summary>
+        /// This regex matches any Origin capture from BUILD_TRACE_REGEX, which contains a file path and series of line numbers,
+        /// 
+        /// Capture 1:
+        ///     The file location of the source file.
+        /// Capture 2:
+        ///     The line numbers provided.
+        ///     often (line nr., char pos in line).
+        ///     sometimes (line start, char start, line end, char end)
+        /// 
+        /// </summary>
+        static readonly Regex ORIGIN_FILE_ENTRY_REGEX = new(@"^(.+?)\(((?:\d+?,?)+)\)$");
+
         public static string VsixPath => System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
 
         Speaker? m_error_speaker;
@@ -74,9 +128,6 @@ namespace VSCodingBuddy
         IVsActivityLog m_activity_log;
 
         List<string> m_prev_err_codes = new();
-        bool m_checking_err_list;
-        DateTime m_err_list_check_start;
-
 
         protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
@@ -128,6 +179,8 @@ namespace VSCodingBuddy
             catch (ArgumentNullException) { }
         }
 
+        record ErrorEntry(string origin, int? line, string code, string message);
+
         /// <summary>
         /// invoked whenever a build has finished.
         /// 
@@ -136,96 +189,96 @@ namespace VSCodingBuddy
         /// </summary>
         /// <param name="Scope"></param>
         /// <param name="Action"></param>
-        private void handleBuildDone(vsBuildScope Scope, vsBuildAction Action)
+        private async void handleBuildDone(vsBuildScope scope, vsBuildAction action)
         {
             // we are not sure here if the build has failed,
             // and we are unable to use IVsBuildStatusCallback, as it simply just doesn't work for some weird reason.
             // 
-            // instead we periodically check the ErrorList for a set time interval, until some error items are detected.
-            // if no error items are detected within this interval, it is assumed the build was succesful.
-            //
-            // To avoid double detects, if HandleBuildDone is invoked, whilst another HandleBuildDone is already checking the error list,
-            // the timer interval is simply reset.
+            // instead we parse the output of the build output window for errors.
+            // these logs contain the error code, message and file origin, which is later used when generating the prompt for gpt-3.
 
-            if (!m_checking_err_list)
-                // checkErrorList is a separate method, to avoid indent hell.
-                _ = JoinableTaskFactory.RunAsync(checkErrorList);
-            else
-                m_err_list_check_start = DateTime.Now;
-        }
-
-        /// <summary>
-        /// checks if the error list has any entries, within the BUILD_CHECK_INTERVAL
-        /// if it has, and the errors were unique from the last check, then call trySpeakCompileError.
-        /// </summary>
-        private async Task checkErrorList()
-        {
-            bool missing_reset = !m_checking_err_list;
-            m_checking_err_list = true;
+            // retrieve text from build output window
 
             await JoinableTaskFactory.SwitchToMainThreadAsync();
-            // get the compile errors, by getting the entries in the error list.
-            var dte = (await GetServiceAsync(typeof(DTE))) as DTE2;
 
-            var err_list = dte.ToolWindows.ErrorList;
+            DTE2 dte = await GetServiceAsync(typeof(DTE)) as DTE2;
 
-            if(missing_reset)
-                m_err_list_check_start = DateTime.Now;
+            OutputWindowPanes panes = dte.ToolWindows.OutputWindow.OutputWindowPanes;
 
-            // the error list does not update instantly, so periodically check the error items count, until it is greater than 0
-            // as the error list then will contain the errors the build produced.
-            //
-            // in case something has gone wrong, and this method is fired,
-            // even though no errors exists, this while loop is also limited to a maximum number of iterations before it stops
-            while (err_list.ErrorItems.Count == 0 && DateTime.Now < m_err_list_check_start.AddMilliseconds(m_settings.ErrorListCheckInterval))
-            {
-                print("Checking error list");
-                System.Threading.Thread.Sleep(50);
-            }
+            EnvDTE.OutputWindowPane build_pane = panes.Item("Build");
 
-            m_checking_err_list = false;
+            string build_output = build_pane.TextDocument.CreateEditPoint(build_pane.TextDocument.StartPoint).GetText(build_pane.TextDocument.EndPoint);
 
-            // either the error list has no items, or is full of warnings,
-            // both of which are seen as succesful builds.
-
-            if (err_list.ErrorItems.Count == 0)
+            // detect if the build action was a build.
+            // a rebuild should also be seen as a build.
+            if (action != vsBuildAction.vsBuildActionBuild && action != vsBuildAction.vsBuildActionRebuildAll)
                 return;
 
-            // this dictionary is used for retrieving the error codes of the errors.
-            var err_list_entries = (err_list as IErrorList).TableControl.Entries
-            .Select((e, i) => new { Entry = e, Index = i + 1 })
-            .ToDictionary(it => it.Index, it => it.Entry);
+            // match all log entries, which contain a warning, error or other similar messages.
 
-            var err_items = err_list.ErrorItems;
+            var matches = BUILD_LOG_ENTRY_REGEX.Matches(build_output);
 
-            List<string> err_codes = new();
-            List<ErrorItem> filtered_err_items = new();
+            // the current project build number.
+            // if this changes, the error list should be reset, as we do not want to mix errors from different projects.
+            int project_number = 1;
+            List<ErrorEntry> error_entries = new();
 
-            for (int i = 0; i < err_items.Count && filtered_err_items.Count < m_settings.CompileMessageCount; i++)
+            foreach(Match entry_match in matches)
             {
-                var item = err_items.Item(i + 1);
-
-                // ignore warnings.
-                if (item.ErrorLevel != vsBuildErrorLevel.vsBuildErrorLevelHigh)
+                if (entry_match.Groups.Count != ENTRY_CAPTURE_COUNT ||
+                    entry_match.Groups[BLE_CATEGORY].Value.ToLower() != "error")
                     continue;
 
-                filtered_err_items.Add(item);
+                int curr_proj_num = int.Parse(entry_match.Groups[BLE_PROJ_NUM].Value);
 
-                // retrieve the error code, to be used when checking if this build scenario has already occured.
+                // if an error is detected, and it is in a new build project,
+                // clear the previous errors, as they should not be mixed with the current errors.
+                if(project_number != curr_proj_num)
+                {
+                    project_number = curr_proj_num;
+                    error_entries.Clear();
+                }
 
-                err_list_entries[i + 1].TryGetValue("errorcode", out object code);
-                err_codes.Add(code as string);
+                // ignore if max compile errors has been hit.
+                if (error_entries.Count >= m_settings.CompileMessageCount)
+                    continue;
+
+                Match file_origin = ORIGIN_FILE_ENTRY_REGEX.Match(entry_match.Groups[BLE_ORIGIN].Value);
+
+                string origin = entry_match.Groups[BLE_ORIGIN].Value;
+                int? line = null;
+
+                if(file_origin.Success)
+                {
+                    origin = file_origin.Groups[1].Value;
+
+                    string err_section_string = file_origin.Groups[2].Value;
+
+                    int separator_indx = err_section_string.IndexOf(',');
+
+                    line = int.Parse(separator_indx == -1 ? err_section_string : err_section_string.Substring(0, separator_indx));
+                }
+
+                error_entries.Add(new(
+                    origin,
+                    line,
+                    entry_match.Groups[BLE_CODE].Value,
+                    entry_match.Groups[BLE_MSG].Value)
+                    );
             }
 
             // the error list contained no errors, therefore ignore this build.
-            if (filtered_err_items.Count == 0)
+            if (error_entries.Count == 0)
                 return;
+
+
+            List<string> err_codes = (from entry in error_entries select entry.code).ToList();
 
             // if the current error codes match exactly with the previous error codes, and AvoidRepeat is enabled,
             // then the build message should not be read out loud.
 
             bool speak;
-            
+
             if (m_settings.AvoidRepeat)
             {
                 speak = false;
@@ -252,7 +305,7 @@ namespace VSCodingBuddy
             m_prev_err_codes = err_codes;
 
             if (speak)
-                await trySpeakCompileError(filtered_err_items);
+                await trySpeakCompileError(error_entries);
         }
 
         /// <summary>
@@ -262,7 +315,7 @@ namespace VSCodingBuddy
         /// </summary>
         /// <param name="error_items"></param>
         /// <returns></returns>
-        private async Task trySpeakCompileError(List<ErrorItem> error_items)
+        private async Task trySpeakCompileError(List<ErrorEntry> error_items)
         {
             string code_snippet = "";
             string error_messages = "";
@@ -272,11 +325,11 @@ namespace VSCodingBuddy
                 var item = error_items[i];
 
                 // generate code snippet form first error.
-                if (i == 0)
+                if (i == 0 && error_items[i].line != null)
                 {
-                    using (StreamReader code_reader = new(item.FileName))
+                    using (StreamReader code_reader = new(item.origin))
                     {
-                        for (int j = 0; j < item.Line - m_settings.LineRange; j++)
+                        for (int j = 0; j < item.line - m_settings.LineRange; j++)
                             await code_reader.ReadLineAsync();
 
 
@@ -292,12 +345,10 @@ namespace VSCodingBuddy
                     }
                 }
                 
-                error_messages += item.Description + '\n';
+                error_messages += item.message + '\n';
             }
 
             // the error messages are truncated in order to reduce prompt token usage.
-            // TODO: this should be user configurable, and should be truncated in a smarter way
-            // TODO 2: the code snippets should also be truncated.
 
             if (error_messages.Length > m_settings.ErrMsgMaxLen)
                 error_messages = error_messages.Substring(0, m_settings.ErrMsgMaxLen) + " (truncated)";

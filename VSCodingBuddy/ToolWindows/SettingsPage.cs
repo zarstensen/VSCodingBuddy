@@ -55,6 +55,11 @@ namespace VSCodingBuddy.ToolWindows
                 
         }
 
+        [Category(GeneralCategory)]
+        [DisplayName("Avoid Repeats")]
+        [Description("Avoid speaking if the current build errors are the same as the last builds errors.")]
+        public bool AvoidRepeat { get; set; } = true;
+
         [Category(BuildCategory)]
         [DisplayName("Code Snippet Range")]
         [Description("Amount of lines above and below the error line, to send to openai")]
@@ -65,10 +70,17 @@ namespace VSCodingBuddy.ToolWindows
         [Description("Amount of compile error messages, to send to openai")]
         public int CompileMessageCount { get; set; } = 2;
         
-        [Category(GeneralCategory)]
-        [DisplayName("Avoid Repeats")]
-        [Description("Avoid speaking if the current build errors are the same as the last builds errors.")]
-        public bool AvoidRepeat { get; set; } = true;
+        [Category(BuildCategory)]
+        [DisplayName("Errors Max Length")]
+        [Description("The maximum length the error section of the compile error prompt ca be, before it is truncated. -1 = do not truncate" +
+            "This number should be decreased if too many tokens are used per openai completion.")]
+        public int ErrMsgMaxLen { get; set; } = 200;
+
+        [Category(BuildCategory)]
+        [DisplayName("Code Line Max Length")]
+        [Description("The maximum possible length of a single line inside a code snippet, before it is truncated. -1 = do not truncate." +
+            "This number should be decreased if too many tokens are used per openai completion.")]
+        public int CodeLineMaxLen { get; set; } = 100;
         
         [Category(ChancesCategory)]
         [DisplayName("Exception Speak Chance")]
@@ -92,22 +104,6 @@ namespace VSCodingBuddy.ToolWindows
             }
         }
 
-        [Category(BuildCategory)]
-        [DisplayName("Errors Max Length")]
-        [Description("The maximum length the error section of the compile error prompt ca be, before it is truncated. -1 = do not truncate" +
-            "This number should be decreased if too many tokens are used per openai completion.")]
-        public int ErrMsgMaxLen { get; set; } = 200;
-
-        [Category(BuildCategory)]
-        [DisplayName("Code Line Max Length")]
-        [Description("The maximum possible length of a single line inside a code snippet, before it is truncated. -1 = do not truncate." +
-            "This number should be decreased if too many tokens are used per openai completion.")]
-        public int CodeLineMaxLen { get; set; } = 100;
-
-        [Category(BuildCategory)]
-        [DisplayName("Error Check Interval")]
-        [Description("For how long the Error List is monitored (in ms), after a build has finished.\nIf errors are not detected, increase this value.")]
-        public int ErrorListCheckInterval { get; set; } = 5000;
 
         /// <summary>
         /// Should be subscribed to in order to apply any updated settings in the settings page instance.
