@@ -32,7 +32,7 @@ namespace VSCodingBuddy.ToolWindows
 
         [Category(OpenAICategory)]
         [DisplayName("OpenAI API Key")]
-        [Description("The openai API key, to be used, when requesting prompt completions. (Requires restart to be updated)")]
+        [Description("The openai API key, to be used, when requesting prompt completions.")]
         public string OpenAIKey { get; set; }
 
         [Category(OpenAICategory)]
