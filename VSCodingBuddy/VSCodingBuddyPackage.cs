@@ -163,7 +163,9 @@ namespace VSCodingBuddy
             var dte = (await GetServiceAsync(typeof(DTE))) as DTE2;
             m_build_events = dte.Events.BuildEvents;
 
-            m_build_events.OnBuildDone += handleBuildDone;
+            m_build_events.OnBuildDone += (s, a) => _ = JoinableTaskFactory.RunAsync(
+                async () => await handleBuildDone(s, a)
+            );
         }
 
         /// <summary>
@@ -189,7 +191,7 @@ namespace VSCodingBuddy
         /// </summary>
         /// <param name="Scope"></param>
         /// <param name="Action"></param>
-        private async void handleBuildDone(vsBuildScope scope, vsBuildAction action)
+        private async Task handleBuildDone(vsBuildScope scope, vsBuildAction action)
         {
             // we are not sure here if the build has failed,
             // and we are unable to use IVsBuildStatusCallback, as it simply just doesn't work for some weird reason.
