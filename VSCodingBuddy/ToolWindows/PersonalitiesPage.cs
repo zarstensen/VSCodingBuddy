@@ -18,14 +18,24 @@ namespace VSCodingBuddy.ToolWindows
     {
         /// <summary>
         /// Dictionary mapping a personality name, to a SpeakerPersonality instance,
-        /// containing all the relevant informaiton about the personality.
+        /// containing all the relevant information about the personality.
         /// 
         /// Also manages a json file, which stores the dictionary in a file, loaded on startup.
         /// 
         /// </summary>
         public Dictionary<string, SpeakerPersonality> Personalities { get; set; } = new() {
-            {"Rude", new("Please explain the following compile build error messages in a very rude and condescending way",
-                "Please explain the following exception error messages in a very rude and condescending way") },
+            { "Helpful", new(
+                    "Please helpfully explain the following build error message",
+                    "Please helpfully explain the following exception error message"
+                ) },
+            { "Rude", new(
+                "Please explain the following compile build error messages in a very rude and condescending way",
+                "Please explain the following exception error messages in a very rude and condescending way"
+                ) },
+            { "Maid", new(
+                "Please explain the following compile build error message like a flustered female cat maid. Make heavy use of phrases like 'UwU', 'Meowster' etc...",
+                "Please explain the following exception error message like a flustered female cat maid. Make heavy use of phrases like 'UwU', 'Meowster' etc..."
+                ) }
             };
 
         /// <summary>
