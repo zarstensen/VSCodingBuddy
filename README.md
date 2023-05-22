@@ -4,12 +4,12 @@ This is an Visual Studio 2022 extension that makes use of the [OpenAI API](https
 to generate and read out loud (un)helpful messages,
 whenever a project fails to build, or a runtime exception is hit.
 
-- [Features]
-- [Built With]
-- [Setup]
-- [Configuration]
-- [Github Repository]
-- [License]
+- [Features](Features)
+- [Built With](Built With)
+- [Setup](Setup)
+- [Configuration](Configuration)
+- [Links](Links)
+- [License](License)
 
 ## Features
 
@@ -97,9 +97,10 @@ prompts can optionally be compressed, by pressing the compress button.
 This works by telling a GPT-3 model to summerise the prompt, which leads to a smaller number of tokens for the prompt.
 This compression strategy does not always produce a desired result, so make sure to make a backup of the original prompt.
 
-## Github Repository
+## Link
 
-Right here -> https://github.com/karstensensensen/VSCodingBuddy
+Github -> https://github.com/karstensensensen/VSCodingBuddy
+Visual Studio Marketplace -> https://marketplace.visualstudio.com/items?itemName=zarstensen.vscb-1
 
 ## License
 See LICENSE.TXT
