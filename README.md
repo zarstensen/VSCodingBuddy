@@ -29,7 +29,7 @@ Read aloud the generated messages, using built in Windows Text To Speech.
 
 Customize the personality of the messages with the personality editor.
 Specify a prompt for both Build errors and Exceptions.
-A default "Rude" personality is included in the extension
+A default "Rude" personality is included in the extension, as well as the "Helpful" and "Maid" personality.
 
 The editor is found under:
 
