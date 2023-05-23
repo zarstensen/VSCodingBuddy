@@ -1,6 +1,6 @@
 <div align="center">
   <h1 align="center">VSCodingBuddy</h1>
-  <img src=VSCodingBuddy/Resources/icon.svg alt="Icon" width="160" height="160"/>
+  <img src=VSCodingBuddy/Resources/Icon.svg alt="Icon" width="160" height="160"/>
 </div>
 
 This is an Visual Studio 2022 extension that makes use of the [OpenAI API](https://platform.openai.com/docs/api-reference),
