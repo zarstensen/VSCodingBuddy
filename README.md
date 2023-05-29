@@ -1,10 +1,10 @@
 <div align="center">
   <h1 align="center">VSCodingBuddy</h1>
-  <img src=VSCodingBuddy/Resources/icon.svg alt="Icon" width="160" height="160"/>
+  <img src=VSCodingBuddy/Resources/Icon.svg alt="Icon" width="160" height="160"/>
 </div>
 
 This is an Visual Studio 2022 extension that makes use of the [OpenAI API](https://platform.openai.com/docs/api-reference),
-to generate and read out loud (un)helpful messages,
+to generate and read out loud messages with a custom personality,
 whenever a project fails to build, or a runtime exception is hit.
 
 - [Features](#features)
@@ -29,7 +29,7 @@ Read aloud the generated messages, using built in Windows Text To Speech.
 
 Customize the personality of the messages with the personality editor.
 Specify a prompt for both Build errors and Exceptions.
-A default "Rude" personality is included in the extension
+A default "Rude" personality is included in the extension, as well as the "Helpful" and "Maid" personality.
 
 The editor is found under:
 
