@@ -4,7 +4,7 @@
 </div>
 
 This is an Visual Studio 2022 extension that makes use of the [OpenAI API](https://platform.openai.com/docs/api-reference),
-to generate and read out loud (un)helpful messages,
+to generate and read out loud messages with a custom personality,
 whenever a project fails to build, or a runtime exception is hit.
 
 - [Features](#features)
