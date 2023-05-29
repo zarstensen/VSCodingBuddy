@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
     <Metadata>
-        <Identity Id="VSCodingBuddy.552567a9-d066-401e-b45c-d62da7d7b8f2" Version="1.2.1.0" Language="en-US" Publisher="zarstensen" />
+        <Identity Id="VSCodingBuddy.552567a9-d066-401e-b45c-d62da7d7b8f2" Version="1.2.1.1" Language="en-US" Publisher="zarstensen" />
         <DisplayName>VSCodingBuddy</DisplayName>
         <Description xml:space="preserve">Helpful AI messages when the program wont work :)</Description>
         <MoreInfo>https://github.com/karstensensensen/VSCodingBuddy</MoreInfo>
