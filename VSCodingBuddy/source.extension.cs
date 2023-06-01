@@ -9,9 +9,9 @@ namespace VSCodingBuddy
     {
         public const string Id = "VSCodingBuddy.552567a9-d066-401e-b45c-d62da7d7b8f2";
         public const string Name = "VSCodingBuddy";
-        public const string Description = @"Read out loud OpenAI GPT-3 generated messages with a custom personality, whenever a build or runtime error has occurred.Read Rea";
+        public const string Description = @"Adds OpenAI GPT-3 Text-To-Speech messages with a custom personality, on build and runtime errors.";
         public const string Language = "en-US";
-        public const string Version = "1.2.3.0";
+        public const string Version = "1.2.3.1";
         public const string Author = "zarstensen";
         public const string Tags = "";
     }
