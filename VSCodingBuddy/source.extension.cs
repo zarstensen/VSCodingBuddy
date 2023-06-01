@@ -11,7 +11,7 @@ namespace VSCodingBuddy
         public const string Name = "VSCodingBuddy";
         public const string Description = @"Read out loud OpenAI GPT-3 generated messages with a custom personality, whenever a build or runtime error has occurred.Read Rea";
         public const string Language = "en-US";
-        public const string Version = "1.2.2.0";
+        public const string Version = "1.2.3.0";
         public const string Author = "zarstensen";
         public const string Tags = "";
     }

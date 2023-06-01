@@ -323,6 +323,14 @@ namespace VSCodingBuddy
         /// <returns></returns>
         private async Task trySpeakCompileError(List<ErrorEntry> error_items)
         {
+            if (m_settings.BuildErrorChance == 0)
+                return;
+
+            // use rng to determine whether the current compile error should be processed.
+
+            if (RNG.Next(1, m_settings.BuildErrorChance) > 1)
+                return;
+
             string code_snippet = "";
             string error_messages = "";
 
